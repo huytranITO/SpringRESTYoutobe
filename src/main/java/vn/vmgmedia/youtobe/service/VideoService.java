@@ -10,6 +10,7 @@ import javax.net.ssl.HttpsURLConnection;
 
 import org.apache.log4j.Logger;
 import org.json.JSONArray;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 import vn.vmgmedia.youtobe.common.ChanelConstants;
@@ -17,11 +18,18 @@ import vn.vmgmedia.youtobe.common.ExportDataUntil;
 import vn.vmgmedia.youtobe.common.HandleHeaderRequest;
 import vn.vmgmedia.youtobe.model.InfoVideoUpload;
 
+/** 
+ *  Get info video base on chanel
+ * @author Huy.Tho
+ * 
+ * */
 @Service
 public class VideoService {
 	private static final Logger logger = Logger.getLogger(VideoService.class);
 	
 	private static String chanel = "";
+	
+	private static String version = "";
 	
 	public Map<String, InfoVideoUpload> getListVideo(String linkChanel, Map<String, InfoVideoUpload> listInfoMappingPlaylist) {
 		VideoService video = new VideoService();
@@ -34,11 +42,16 @@ public class VideoService {
 	 * @param String linkChanel youtobe
 	 * @return void
 	 * */
-	public void getInfoVideoChanel(String linkChanel, Map<String, InfoVideoUpload> listInfoMappingPlaylist, Map<String, InfoVideoUpload> listInfoVideo) {
+	@Async
+	public void getInfoVideoChanel(String chanelLink, Map<String, InfoVideoUpload> listInfoMappingPlaylist, Map<String, InfoVideoUpload> listInfoVideo) {
 		String pageContinue = ChanelConstants.FIRST_PAGE_VIDEO_PUBLISH;
 		
 		String cToken = null;
-		String date = new ExportDataUntil().getCurrentDate();
+		String version = new HandleHeaderRequest().getVersion(chanelLink);
+		if (version == null) {
+			version = "2."+ new ExportDataUntil().getCurrentDate()+".00.00";
+		}
+		String linkChanel = "";
 		do {
 			try {
 				
@@ -47,14 +60,15 @@ public class VideoService {
 							+"&continuation"+cToken
 							+ "&itct="+pageContinue;
 				} else {
-					linkChanel = linkChanel + pageContinue;
+					linkChanel = chanelLink + pageContinue;
 				}
 				
 				URL url = new URL(linkChanel);
 				HttpsURLConnection getConnect = (HttpsURLConnection) url.openConnection();
 				getConnect.setRequestMethod("GET");
+				getConnect.setRequestProperty("Content-type", "application/json; charset=utf-8");
 				getConnect.setRequestProperty("x-youtube-client-name", "1");
-				getConnect.setRequestProperty("x-youtube-client-version", "2."+date+".00.00");
+				getConnect.setRequestProperty("x-youtube-client-version", version);
 				getConnect.setDoOutput(true);
 				
 				int responseCode = getConnect.getResponseCode();
@@ -62,7 +76,7 @@ public class VideoService {
 				if (responseCode == HttpsURLConnection.HTTP_OK) {
 					
 					BufferedReader bufferedReader = 
-							new BufferedReader(new InputStreamReader(getConnect.getInputStream()));
+							new BufferedReader(new InputStreamReader(getConnect.getInputStream(), "UTF-8"));
 					
 					StringBuffer response = new StringBuffer();
 					

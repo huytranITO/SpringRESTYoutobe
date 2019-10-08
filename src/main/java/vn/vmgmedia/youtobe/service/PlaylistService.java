@@ -3,17 +3,15 @@ package vn.vmgmedia.youtobe.service;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.net.URL;
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import javax.net.ssl.HttpsURLConnection;
 
 import org.apache.log4j.Logger;
 import org.json.JSONArray;
 import org.json.JSONException;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 import vn.vmgmedia.youtobe.common.ChanelConstants;
@@ -22,12 +20,19 @@ import vn.vmgmedia.youtobe.common.HandleHeaderRequest;
 import vn.vmgmedia.youtobe.model.InfoPlaylistUpload;
 import vn.vmgmedia.youtobe.model.InfoVideoUpload;
 
-
+/** 
+ *  Get info video base on playlist chanel
+ * @author Huy.Tho
+ * 
+ * */
 @Service
 public class PlaylistService {
+	
 	private static final Logger logger = Logger.getLogger(PlaylistService.class);
 	
 	public static String chanel = "";
+	
+	private static String version = "";
 	
 	public Map<String, InfoVideoUpload> getVideoMappingPlaylist(String linkChanel) {
 		
@@ -43,8 +48,13 @@ public class PlaylistService {
 	 * @param String linkChanel youtobe
 	 * @return void
 	 * */
+	@Async
 	public void getInfoPlaylistChanel(String linkChanel, Map<String, InfoVideoUpload> listVideoMapping) {
+		version = new HandleHeaderRequest().getVersion(linkChanel);
 		
+		if (version == null) {
+			version = "2."+ new ExportDataUntil().getCurrentDate()+".00.00";
+		}
 		String pageContinue = ChanelConstants.PAGE_FIRST_PLAYLIST;
 		
 		String cToken = null;
@@ -63,8 +73,9 @@ public class PlaylistService {
 				URL url = new URL(linkChanel);
 				HttpsURLConnection getConnect = (HttpsURLConnection) url.openConnection();
 				getConnect.setRequestMethod("GET");
+				getConnect.setRequestProperty("Content-type", "application/json; charset=utf-8");
 				getConnect.setRequestProperty("x-youtube-client-name", "1");
-				getConnect.setRequestProperty("x-youtube-client-version", "2."+ new ExportDataUntil().getCurrentDate()+".00.00");
+				getConnect.setRequestProperty("x-youtube-client-version", version);
 				getConnect.setDoOutput(true);
 				
 				int responseCode = getConnect.getResponseCode();
@@ -72,7 +83,7 @@ public class PlaylistService {
 				if (responseCode == HttpsURLConnection.HTTP_OK) {
 					
 					BufferedReader bufferedReader = 
-							new BufferedReader(new InputStreamReader(getConnect.getInputStream()));
+							new BufferedReader(new InputStreamReader(getConnect.getInputStream(), "UTF-8"));
 					
 					StringBuffer response = new StringBuffer();
 					
@@ -135,9 +146,7 @@ public class PlaylistService {
 			 	playlist.setTypePlaylist(ChanelConstants.LIST_CREATED);
 				playlist.setNamePlayList(listPlaylist.getJSONObject(j).getJSONObject("gridPlaylistRenderer").getJSONObject("title")
 																	.getJSONArray("runs").getJSONObject(0).getString("text"));
-				MappingInfoService mapping = new MappingInfoService();
-				mapping.chanel = chanel;
-            	mapping.mappingVideoBaseOnPlaylist(playlist, listVideoMapping);
+            	new PlaylistService().mappingVideoBaseOnPlaylist(version ,playlist, listVideoMapping);
 			}
 		} catch (Exception e) {
 			logger.error(e.getMessage(), e.getCause());
@@ -163,18 +172,284 @@ public class PlaylistService {
 				
 				playlist.setNamePlayList(listPlaylist.getJSONObject(j).getJSONObject("gridPlaylistRenderer").getJSONObject("title")
 						.getJSONArray("runs").getJSONObject(0).getString("text"));
-				new Thread(new Runnable() {
-                    @Override
-                    public void run() {
-							MappingInfoService mapping = new MappingInfoService();
-	                    	mapping.mappingVideoBaseOnPlaylist(playlist, listVideoMapping);
-                    }
-                    }).start();
-				/* lisInfoPLaylist.add(playlist); */
+		        new PlaylistService().mappingVideoBaseOnPlaylist(version, playlist, listVideoMapping);
 			}
 		} catch (Exception e) {
 				logger.error(e.getMessage(), e.getCause());
 		}
 	}
-	 
+	//------------------------
+	/** Mapping video with playlist
+	 * @param List<InfoPlaylistUpload> listPlaylist
+	 * @param Map<String, InfoVideoUpload> listInfoVideo
+	 * */
+	@Async
+	public void mappingVideoBaseOnPlaylist(String version, InfoPlaylistUpload playlist, Map<String, InfoVideoUpload> listInfoVideo) {
+		String linkPlaylist = ChanelConstants.LINK_PLAYLIST;
+		
+		String pageContinue = ChanelConstants.FIRST_PAGE;
+		
+		String cToken = null;
+		
+		try {
+			do {
+
+				if (cToken != null) {
+					linkPlaylist = "https://www.youtube.com/browse_ajax?ctoken="+cToken
+							+"&continuation="+cToken
+							+ "&itct="+pageContinue;
+				} else {
+					linkPlaylist = linkPlaylist + playlist.id + pageContinue;
+				}
+				
+				URL url = new URL(linkPlaylist);
+				HttpsURLConnection getConnect = (HttpsURLConnection) url.openConnection();
+				getConnect.setRequestMethod("GET");
+				getConnect.setRequestProperty("Content-type", "application/json; charset=utf-8");
+				getConnect.setRequestProperty("x-youtube-client-name", "1");
+				getConnect.setRequestProperty("x-youtube-client-version", version);
+				getConnect.setDoOutput(true);
+				
+				int responseCode = getConnect.getResponseCode();
+				if (responseCode == HttpsURLConnection.HTTP_OK) {
+					
+					BufferedReader bufferedReader = 
+							new BufferedReader(new InputStreamReader(getConnect.getInputStream(),"UTF-8"));
+					
+					StringBuffer response = new StringBuffer();
+					
+					String readLine = null;
+					while ((readLine = bufferedReader.readLine()) != null) {
+						
+						response.append(readLine);
+					}
+					
+					bufferedReader.close();
+					
+					JSONArray jsonArrayParent = new JSONArray(response.toString());
+					
+					// Get info video to list
+					if (pageContinue == ChanelConstants.FIRST_PAGE) {
+						cToken = getTokenFirst(jsonArrayParent);
+						pageContinue = getPageFirst(jsonArrayParent);
+						getFirstListVideoInfo(playlist, jsonArrayParent, listInfoVideo);
+					} else {
+						cToken = getToken(jsonArrayParent);
+						pageContinue = getPage(jsonArrayParent);
+						getListVideoInfo(playlist, jsonArrayParent, listInfoVideo);
+					}
+				}
+				
+			} while (pageContinue != null);
+		} catch (Exception e) {
+			logger.error(e.getMessage());
+		}
+	}
+	
+	public void getFirstListVideoInfo(InfoPlaylistUpload playlist, JSONArray jsonArrayParent, Map<String, InfoVideoUpload> listInfoVideo) {
+		try {
+			JSONArray listVideo = jsonArrayParent.getJSONObject(1)
+					.getJSONObject("response")
+					.getJSONObject("contents")
+					.getJSONObject("twoColumnBrowseResultsRenderer")
+					.getJSONArray("tabs")
+					.getJSONObject(0)
+					.getJSONObject("tabRenderer")
+					.getJSONObject("content")
+					.getJSONObject("sectionListRenderer")
+					.getJSONArray("contents")
+					.getJSONObject(0)
+					.getJSONObject("itemSectionRenderer")
+					.getJSONArray("contents")
+					.getJSONObject(0)
+					.getJSONObject("playlistVideoListRenderer")
+					.getJSONArray("contents");
+			
+			for (int j = 0; j < listVideo.length(); j++) {
+				try {
+					InfoVideoUpload youtobe = new InfoVideoUpload();
+					youtobe.setId(j);
+					
+					String link = listVideo.getJSONObject(j)
+							.getJSONObject("playlistVideoRenderer")
+							.getString("videoId");
+					if(checkKey(link, listInfoVideo)) {
+						if (listInfoVideo.get(link).getPlayList() == null) {
+							listInfoVideo.get(link).setPlayList("");
+						}
+						listInfoVideo.get(link).setPlayList(listInfoVideo.get(link).getPlayList().concat(",".concat(playlist.getNamePlayList())));
+						continue;
+					}
+					youtobe.setLinkVideo(ChanelConstants.LINK_YOUTOBE
+							.concat(link));
+					
+					youtobe.setChanel(chanel);
+					
+					
+					youtobe.setNameVideo(listVideo.getJSONObject(j)
+							.getJSONObject("playlistVideoRenderer")
+							.getJSONObject("title")
+							.getString("simpleText"));
+					
+					youtobe.setTimeVideo(listVideo.getJSONObject(j)
+							.getJSONObject("playlistVideoRenderer")
+							.getJSONObject("lengthText")
+							.getString("simpleText"));
+					
+					youtobe.setPlayList(playlist.getNamePlayList());
+					
+					listInfoVideo.put(link, youtobe);
+				} catch (Exception e) {
+					continue;
+				}
+			}
+		} catch (Exception e) {
+			logger.error(e.getMessage() + "method getFirstListVideoInfo");
+		}
+	}
+	
+	public void getListVideoInfo(InfoPlaylistUpload playlist, JSONArray jsonArrayParent, Map<String, InfoVideoUpload> listInfoVideo) {
+		try {
+			JSONArray listVideo = jsonArrayParent.getJSONObject(1)
+					.getJSONObject("response")
+					.getJSONObject("continuationContents")
+					.getJSONObject("playlistVideoListContinuation")
+					.getJSONArray("contents");
+			
+			for (int j = 0; j < listVideo.length(); j++) {
+				try {
+					InfoVideoUpload youtobe = new InfoVideoUpload();
+					youtobe.setId(j);
+					
+					String link = listVideo.getJSONObject(j)
+							.getJSONObject("playlistVideoRenderer")
+							.getString("videoId");
+					
+					if(checkKey(link, listInfoVideo)) {
+						if (listInfoVideo.get(link).getPlayList() == null) {
+							listInfoVideo.get(link).setPlayList(playlist.getNamePlayList());
+						} else {
+							listInfoVideo.get(link).setPlayList(listInfoVideo.get(link).getPlayList().concat(",".concat(playlist.getNamePlayList())));
+						}
+						continue;
+					}
+					
+					youtobe.setLinkVideo(ChanelConstants.LINK_YOUTOBE.concat(link));
+					
+					youtobe.setChanel(chanel);
+						youtobe.setNameVideo(listVideo.getJSONObject(j)
+								.getJSONObject("playlistVideoRenderer")
+								.getJSONObject("title")
+								.getString("simpleText"));
+	
+					youtobe.setTimeVideo(listVideo.getJSONObject(j)
+							.getJSONObject("playlistVideoRenderer")
+							.getJSONObject("lengthText")
+							.getString("simpleText"));
+					
+					youtobe.setPlayList(playlist.getNamePlayList());
+					
+					listInfoVideo.put(link, youtobe);
+				} catch (Exception e) {
+					continue;
+				}
+			}
+		} catch (Exception e) {
+			logger.error(e.getMessage() + "method getListVideoInfo" );
+		}
+	}
+	
+	public String getPageFirst(JSONArray jsonArrayParent) {
+		try {
+			return jsonArrayParent.getJSONObject(1)
+					.getJSONObject("response")
+					.getJSONObject("contents")
+					.getJSONObject("twoColumnBrowseResultsRenderer")
+					.getJSONArray("tabs")
+					.getJSONObject(0)
+					.getJSONObject("tabRenderer")
+					.getJSONObject("content")
+					.getJSONObject("sectionListRenderer")
+					.getJSONArray("contents")
+					.getJSONObject(0)
+					.getJSONObject("itemSectionRenderer")
+					.getJSONArray("contents")
+					.getJSONObject(0)
+					.getJSONObject("playlistVideoListRenderer")
+					.getJSONArray("continuations")
+					.getJSONObject(0)
+					.getJSONObject("nextContinuationData")
+					.getString("clickTrackingParams");
+		} catch (JSONException e) {
+			return null;
+		}
+	}
+	
+	public String getTokenFirst(JSONArray jsonArrayParent) {
+		try {
+			return jsonArrayParent.getJSONObject(1)
+					.getJSONObject("response")
+					.getJSONObject("contents")
+					.getJSONObject("twoColumnBrowseResultsRenderer")
+					.getJSONArray("tabs")
+					.getJSONObject(0)
+					.getJSONObject("tabRenderer")
+					.getJSONObject("content")
+					.getJSONObject("sectionListRenderer")
+					.getJSONArray("contents")
+					.getJSONObject(0)
+					.getJSONObject("itemSectionRenderer")
+					.getJSONArray("contents")
+					.getJSONObject(0)
+					.getJSONObject("playlistVideoListRenderer")
+					.getJSONArray("continuations")
+					.getJSONObject(0)
+					.getJSONObject("nextContinuationData")
+					.getString("continuation");
+		} catch (JSONException e) {
+			return null;
+		}
+	}
+	
+	
+	public String getPage(JSONArray jsonArrayParent) {
+		try {
+			return jsonArrayParent.getJSONObject(1)
+					.getJSONObject("response")
+					.getJSONObject("continuationContents")
+					.getJSONObject("playlistVideoListContinuation")
+					.getJSONArray("continuations")
+					.getJSONObject(0)
+					.getJSONObject("nextContinuationData")
+					.getString("clickTrackingParams");
+		} catch (Exception e) {
+			return null;
+		}
+	}
+	
+	public String getToken(JSONArray jsonArrayParent) {
+		try {
+			return jsonArrayParent.getJSONObject(1)
+					.getJSONObject("response")
+					.getJSONObject("continuationContents")
+					.getJSONObject("playlistVideoListContinuation")
+					.getJSONArray("continuations")
+					.getJSONObject(0)
+					.getJSONObject("nextContinuationData")
+					.getString("continuation");
+		} catch (Exception e) {
+			return null;
+		}
+	}
+	
+	public boolean checkKey(String link, Map<String, InfoVideoUpload> obj) {
+		for (Map.Entry<String, InfoVideoUpload> entity: obj.entrySet()) {
+			if(link.equals(entity.getKey())) {
+				return true;
+			}
+		}
+		return false;
+	}
+	
+	
 }

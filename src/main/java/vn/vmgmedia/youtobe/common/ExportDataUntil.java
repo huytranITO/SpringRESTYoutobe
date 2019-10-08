@@ -1,6 +1,7 @@
 package vn.vmgmedia.youtobe.common;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStreamWriter;
@@ -17,6 +18,7 @@ import org.apache.poi.ss.usermodel.IndexedColors;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -27,6 +29,11 @@ import com.opencsv.CSVWriter;
 import vn.vmgmedia.youtobe.model.InfoVideoUpload;
 
 
+/** ExportDataUntil
+ * Write data and export file|JSON
+ * @author Huy.Tho
+ * 
+ * */
 public class ExportDataUntil {
 
 	private static final Logger logger = Logger.getLogger(ExportDataUntil.class);
@@ -65,7 +72,7 @@ public class ExportDataUntil {
 				FileOutputStream fileStream = new FileOutputStream(fileData);
 				OutputStreamWriter writerStream = new OutputStreamWriter(fileStream, "UTF-8");
 				CSVWriter writer = new CSVWriter(writerStream);
-				String [] header = {"Id", "Tên video", "�?ộ dài", "Kênh", "Playlist"};
+				String [] header = {"Id", "Tên video", "Độ dài", "Kênh", "Playlist"};
 				writer.writeNext(header);
 				
 				for (Map.Entry<String, InfoVideoUpload> video: listVideo.entrySet()) {
@@ -144,10 +151,42 @@ public class ExportDataUntil {
 		}
 	}
 	
+	public void modifyExistingWorkbook(File fileData, Map<String, InfoVideoUpload> listVideo) {
+			try {
+				FileInputStream inputStream = new FileInputStream(fileData);
+				Workbook workbook = WorkbookFactory.create(fileData);
+				Sheet sheet = workbook.getSheetAt(0);
+				int rowCount = sheet.getLastRowNum();
+				
+				for (Map.Entry<String, InfoVideoUpload> video : listVideo.entrySet()) {
+					Row row = sheet.createRow(++rowCount);
+					row.createCell(0).setCellValue(rowCount-1);
+					row.createCell(1).setCellValue(video.getValue().getNameVideo());
+					row.createCell(2).setCellValue(video.getValue().getTimeVideo());
+					row.createCell(3).setCellValue(video.getValue().getChanel());
+					row.createCell(4).setCellValue(video.getValue().getPlayList());
+					row.createCell(5).setCellValue(video.getValue().getLinkVideo());
+				}
+				inputStream.close();
+				FileOutputStream outputStream = new FileOutputStream(fileData);
+				workbook.write(outputStream);
+	            workbook.close();
+	            outputStream.close();
+				
+			} catch (Exception e) {
+				logger.error("Edit file error: ", e.getCause());
+			} 
+	}
+	
 	public String getCurrentDate () {
 		DateFormat dateFormat = new SimpleDateFormat("yyyyMMdd");
         Date date = new Date();
         return dateFormat.format(date).toString();
 	}
 	
+	public String timeSystem() {
+		DateFormat dateFormat = new SimpleDateFormat("yyyyMMddHHss");
+        Date date = new Date();
+        return dateFormat.format(date).toString();
+	}
 }

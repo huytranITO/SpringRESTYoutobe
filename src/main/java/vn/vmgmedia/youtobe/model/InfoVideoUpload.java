@@ -1,5 +1,9 @@
 package vn.vmgmedia.youtobe.model;
 
+/** Info video
+ * @author Huy.Tho
+ * 
+ * */
 public class InfoVideoUpload {
 	public int id;
 	

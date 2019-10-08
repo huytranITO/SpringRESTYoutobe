@@ -1,5 +1,9 @@
 package vn.vmgmedia.youtobe.model;
 
+/** Info playlist
+ * @author Huy.Tho
+ * 
+ * */
 public class InfoPlaylistUpload {
 	
 	public String id;

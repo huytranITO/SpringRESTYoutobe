@@ -1,5 +1,10 @@
 package vn.vmgmedia.youtobe.common;
 
+/** ChanelConstants
+ * Constant
+ * @author Huy.Tho
+ * 
+ * */
 public class ChanelConstants {
 	public static final String HOME_YOUTOBE = "https://www.youtube.com/";
 	
@@ -10,6 +15,8 @@ public class ChanelConstants {
 	public static final String PAGE_FIRST = "/videos?pbj=1";
 	
 	public static final String FIRST_PAGE = "&pbj=1";
+	
+	public static final String FIRST_FEATURED= "/featured";
 	
 	public static final String FIRST_PAGE_VIDEO_PUBLISH ="/videos?view=0&sort=dd&shelf_id=0&pbj=1";
 	
