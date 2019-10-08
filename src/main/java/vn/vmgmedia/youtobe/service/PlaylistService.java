@@ -9,6 +9,7 @@ import java.util.Map;
 import javax.net.ssl.HttpsURLConnection;
 
 import org.apache.log4j.Logger;
+import org.apache.logging.log4j.message.AsynchronouslyFormattable;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.springframework.scheduling.annotation.Async;
@@ -119,6 +120,7 @@ public class PlaylistService {
 		} while (pageContinue != null);
 	}
 	
+	@Async
 	public static Map<String, InfoVideoUpload> getFirstInfoPlayList(JSONArray jsonArrayParent, Map<String, InfoVideoUpload> listVideoMapping) {
 		//Map<String, InfoVideoUpload> listVideo = new HashMap<String, InfoVideoUpload>();
 		try {
@@ -146,7 +148,7 @@ public class PlaylistService {
 			 	playlist.setTypePlaylist(ChanelConstants.LIST_CREATED);
 				playlist.setNamePlayList(listPlaylist.getJSONObject(j).getJSONObject("gridPlaylistRenderer").getJSONObject("title")
 																	.getJSONArray("runs").getJSONObject(0).getString("text"));
-            	new PlaylistService().mappingVideoBaseOnPlaylist(version ,playlist, listVideoMapping);
+            	new PlaylistService().mappingVideoBaseOnPlaylist(version, playlist, listVideoMapping);
 			}
 		} catch (Exception e) {
 			logger.error(e.getMessage(), e.getCause());
@@ -155,6 +157,7 @@ public class PlaylistService {
 		return listVideoMapping;
 	}
 	
+	@Async
 	public static void getContinueListPlaylistInfo(JSONArray jsonArrayParent, Map<String, InfoVideoUpload> listVideoMapping) {
 		try {
 			JSONArray listPlaylist = jsonArrayParent.getJSONObject(1)
@@ -443,10 +446,8 @@ public class PlaylistService {
 	}
 	
 	public boolean checkKey(String link, Map<String, InfoVideoUpload> obj) {
-		for (Map.Entry<String, InfoVideoUpload> entity: obj.entrySet()) {
-			if(link.equals(entity.getKey())) {
-				return true;
-			}
+		if (obj.get(link) != null ) {
+			return true;
 		}
 		return false;
 	}

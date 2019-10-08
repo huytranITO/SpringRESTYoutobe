@@ -2,6 +2,7 @@ package vn.vmgmedia.youtobe.controller;
 
 import java.util.Map;
 
+import org.apache.commons.collections4.map.HashedMap;
 import org.json.JSONObject;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -42,10 +43,11 @@ public class YoutobeController {
 		
 		String nameChanel = tmpChanel[tmpChanel.length-1];
 		
-		Map<String, InfoVideoUpload> listInfoVideo = mappingInfoService.mergeData(linkChanel);
+		Map<String, InfoVideoUpload> listInfoVideo = new HashedMap<String, InfoVideoUpload>();
+		listInfoVideo = videoService.getListVideo(linkChanel, listInfoVideo);
 		
 		ExportDataUntil exp = new ExportDataUntil();
-		String fileName = "\\"+exp.timeSystem().concat(nameChanel.concat(".xlsx"));
+		String fileName = "\\"+exp.timeSystem().concat(nameChanel.concat("videos.xlsx"));
 		
 		String fileExport = exp.wirteFileExel(pathFileFolder, fileName, listInfoVideo);
 		JSONObject json = exp.exportJson(fileExport, ChanelConstants.TYPES, listInfoVideo);
@@ -53,11 +55,26 @@ public class YoutobeController {
 		return json.toString();
 	}
 	 
-	@PostMapping(path= "/videos/chanel/playlist", consumes = "application/json", produces = "application/json")
+	@PostMapping(path= "/videos/playlist", consumes = "application/json", produces = "application/json")
 	public String getVideoInfoPlaylist(@RequestBody String chanel) throws Exception {
 		
-		String user ="abc"+chanel;
+		JSONObject jsObject = new JSONObject(chanel);
+		
+		String linkChanel = jsObject.getString("chanel");
+
+		String [] tmpChanel = linkChanel.split("/");
+		
+		String nameChanel = tmpChanel[tmpChanel.length-1];
+		
+		Map<String, InfoVideoUpload> listInfoVideo = new HashedMap<String, InfoVideoUpload>();
+		listInfoVideo = mappingInfoService.mergeData(linkChanel);
+		
+		ExportDataUntil exp = new ExportDataUntil();
+		String fileName = "\\"+exp.timeSystem().concat(nameChanel.concat("playlist.xlsx"));
+		
+		String fileExport = exp.wirteFileExel(pathFileFolder, fileName, listInfoVideo);
+		JSONObject json = exp.exportJson(fileExport, ChanelConstants.TYPES, listInfoVideo);
         
-		return chanel;
+		return json.toString();
 	}
 }
