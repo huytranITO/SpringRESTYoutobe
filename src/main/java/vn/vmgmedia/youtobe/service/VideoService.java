@@ -105,6 +105,7 @@ public class VideoService {
 				}
 			} catch (Exception e) {
 				logger.error(e.getMessage() + " method getInfoVideoChanel");
+				break;
 			}
 		} while (pageContinue != null);
 	}
